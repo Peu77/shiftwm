@@ -1,47 +1,81 @@
 #include <stdio.h>
 #include <X11/Xlib.h>
+#include "client.h"
 
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
+Display *display;
+Window root;
+
+
+void updateWindows() {
+    Client *client = getHead();
+
+    int i = 0;
+    while (client->window != 0) {
+        if (client == NULL) {
+            printf("client is null\n");
+            return;
+        }
+
+        moveClient(display, client, i * client->width, client->y);
+        i++;
+        client = client->next;
+    }
+}
+
+void onNewWindow(XMapRequestEvent event) {
+    printf("create window\n");
+    int width = 300;
+    int height = 300;
+
+    createClient(display, event.window, width, height);
+    updateWindows();
+}
+
+void handleEvents() {
+    XEvent event;
+    XNextEvent(display, &event);
+
+    if (event.type == MapRequest) {
+        onNewWindow(event.xmaprequest);
+    }
+
+    if (event.type == UnmapNotify) {
+        printf("unmap window\n");
+        Window window = event.xunmap.window;
+        Client *client = getClientFromWindow(&window);
+        if (client != NULL) {
+            removeClient(client);
+            updateWindows();
+        }
+    }
+}
 
 int main(void) {
-    Display *display;
-    XWindowAttributes attr;
-    XButtonEvent start;
-    XEvent ev;
+    printf("Shift-WM 1.0 starting..\n");
 
-    if (!(display = XOpenDisplay(0x0))) return 1;
+    if (!(display = XOpenDisplay(0x0))) {
+        printf("Cannot open display\n");
+        return 1;
+    }
 
-    XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("F1")), Mod1Mask,
-             DefaultRootWindow(display), True, GrabModeAsync, GrabModeAsync);
+    root = DefaultRootWindow(display);
 
-    XGrabButton(display, 1, Mod1Mask, DefaultRootWindow(display), True,
-                ButtonPressMask | ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(
+            //Display, Button, Modifiers
+            display, AnyButton, AnyModifier,
+            //Window, OwnerE?, EventMask
+            root, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | OwnerGrabButtonMask,
+            //PointerMode, KBMode, Confine, Cursor
+            GrabModeAsync, GrabModeAsync, None, None
+    );
 
-    XGrabButton(display, 3, Mod1Mask, DefaultRootWindow(display), True,
-                ButtonPressMask | ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, None);
+    XSelectInput(display, root, FocusChangeMask | PropertyChangeMask |
+                                SubstructureNotifyMask | SubstructureRedirectMask |
+                                KeyPressMask | ButtonPressMask);
 
-    start.subwindow = None;
-    for (;;) {
-        XNextEvent(display, &ev);
+    printf("Done!\n");
 
-        if (ev.type == ButtonRelease && ev.xbutton.subwindow != None)
-            printf("Window %ld released\n", ev.xbutton.subwindow);
-
-        if (ev.type == KeyPress && ev.xkey.subwindow != None)
-            XRaiseWindow(display, ev.xkey.subwindow);
-        else if (ev.type == ButtonPress && ev.xbutton.subwindow != None) {
-            XGetWindowAttributes(display, ev.xbutton.subwindow, &attr);
-            printf("Window %ld moved to %d,%d\n", ev.xbutton.subwindow, attr.x, attr.y);
-            start = ev.xbutton;
-        } else if (ev.type == MotionNotify && start.subwindow != None) {
-            int xdiff = ev.xbutton.x_root - start.x_root;
-            int ydiff = ev.xbutton.y_root - start.y_root;
-            XMoveResizeWindow(display, start.subwindow,
-                              attr.x + (start.button == 1 ? xdiff : 0),
-                              attr.y + (start.button == 1 ? ydiff : 0),
-                              MAX(1, attr.width + (start.button == 3 ? xdiff : 0)),
-                              MAX(1, attr.height + (start.button == 3 ? ydiff : 0)));
-        } else if (ev.type == ButtonRelease)
-            start.subwindow = None;
+    while (1) {
+        handleEvents();
     }
 }

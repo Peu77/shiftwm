@@ -8,6 +8,6 @@ link_libraries(${X11_LIBRARIES})
 include_directories(${X11_INCLUDE_DIR})
 
 # add src every file in /src
-file(GLOB SOURCE_FILES src/*.c)
+file(GLOB SOURCES src/*.c)
 
-add_executable(tinywm ${SOURCE_FILES})
+add_executable(tinywm ${SOURCES})
