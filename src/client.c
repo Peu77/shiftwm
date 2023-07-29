@@ -18,19 +18,28 @@ void createClient(Display *display, Window window, int width, int height) {
     newClient->window = window;
     newClient->isFocus = 1;
 
+    // set border width and color
+    XSetWindowBorder(display, window, 0xe81a0c);
+    XSetWindowBorderWidth(display, window, 2);
+
+    // set focus and unfocus event
+    XSelectInput(display, window, FocusChangeMask | EnterWindowMask | LeaveWindowMask);
+
+    // create linked-list head if it is the first window
     if (getHead() == NULL) {
         head = malloc(sizeof(Client));
         head->window = 0;
     }
 
+    // add client to linked-list
     newClient->next = head;
     head = newClient;
 
+    // set client position, size and show it on the top
     newClient->width = width;
     newClient->height = height;
     XMapWindow(display, window);
     XRaiseWindow(display, window);
-
     XMoveResizeWindow(display, window,
                       0, 0, width, height);
 
