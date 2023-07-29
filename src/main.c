@@ -17,8 +17,10 @@ Layout *getCurrentLayout() {
 }
 
 struct {
-    XButtonEvent buttonEvent;
-    XWindowAttributes windowAttributes;
+    int dragging;
+    int diffX;
+    int diffY;
+    Window *window;
 } dragWindow;
 
 void onNewWindow(XMapRequestEvent event) {
@@ -52,7 +54,7 @@ void handleEvents() {
 
     // if mouse cursor is moved inside a window
     if (event.type == EnterNotify) {
-        if (dragWindow.buttonEvent.subwindow == None) {
+        if (dragWindow.dragging == 0) {
             printf("mouse enter\n");
             // print title of the window
             char *title;
@@ -65,7 +67,7 @@ void handleEvents() {
 
     // if mouse cursor is moved outside a window
     if (event.type == LeaveNotify) {
-        if (dragWindow.buttonEvent.subwindow == None) {
+        if (dragWindow.dragging == 0) {
             printf("mouse leave\n");
         }
     }
@@ -75,28 +77,27 @@ void handleEvents() {
         // get window hovered by mouse cursor
         Window window = event.xbutton.subwindow;
         if (window) {
-            XGetWindowAttributes(display, window, &dragWindow.windowAttributes);
+            XWindowAttributes windowAttributes;
+            XGetWindowAttributes(display, window, &windowAttributes);
             XRaiseWindow(display, window);
 
-            dragWindow.buttonEvent = event.xbutton;
+            dragWindow.diffX = event.xbutton.x_root - windowAttributes.x;
+            dragWindow.diffY = event.xbutton.y_root - windowAttributes.y;
+            dragWindow.dragging = 1;
+
+            dragWindow.window = &window;
         }
     }
 
     // hold alt + left click to drag window
     if (event.type == MotionNotify) {
-        XButtonEvent buttonEvent = dragWindow.buttonEvent;
-        XWindowAttributes windowAttributes = dragWindow.windowAttributes;
-
-        int diffX = event.xmotion.x_root - buttonEvent.x;
-        int diffY = event.xmotion.y_root - buttonEvent.y;
-
-        XMoveWindow(display, buttonEvent.subwindow,
-                    windowAttributes.x + diffX,
-                    windowAttributes.y + diffY);
+        XMoveWindow(display, *dragWindow.window,
+                    event.xmotion.x_root - dragWindow.diffX,
+                    event.xmotion.y_root - dragWindow.diffY);
     }
 
     if (event.type == ButtonRelease) {
-        dragWindow.buttonEvent.subwindow = None;
+        dragWindow.dragging = 0;
     }
 }
 
