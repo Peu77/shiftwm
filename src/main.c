@@ -3,25 +3,17 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include "client.h"
+#include "layout.h"
 
 Display *display;
 Window root;
 
+Layout layout[10];
+int currentLayout = 0;
 
-void updateWindows() {
-    Client *client = getHead();
 
-    int i = 0;
-    while (client->window != 0) {
-        if (client == NULL) {
-            printf("client is null\n");
-            return;
-        }
-
-        moveClient(display, client, i * client->width, client->y);
-        i++;
-        client = client->next;
-    }
+Layout *getCurrentLayout() {
+    return &layout[currentLayout];
 }
 
 void onNewWindow(XMapRequestEvent event) {
@@ -29,8 +21,8 @@ void onNewWindow(XMapRequestEvent event) {
     int width = 300;
     int height = 300;
 
-    createClient(display, event.window, width, height);
-    updateWindows();
+    createClient(display, getCurrentLayout(), event.window, width, height);
+    updateLayout(display, getCurrentLayout(), 1920, 1080);
 }
 
 void handleEvents() {
@@ -46,10 +38,10 @@ void handleEvents() {
     if (event.type == UnmapNotify) {
         printf("unmap window\n");
         Window window = event.xunmap.window;
-        Client *client = getClientFromWindow(&window);
+        Client *client = getClientFromWindow(getCurrentLayout(), &window);
         if (client != NULL) {
-            removeClient(client);
-            updateWindows();
+            removeClient(getCurrentLayout(), client);
+            updateLayout(display, getCurrentLayout(), 1920, 1080);
         }
     }
 
@@ -98,19 +90,7 @@ void drawableWindow() {
 
 }
 
-int main(void) {
-    printf("Shift-WM 1.0 starting..\n");
-
-    if (!(display = XOpenDisplay(0x0))) {
-        printf("Cannot open display\n");
-        return 1;
-    }
-
-    pthread_t thread;
-    pthread_create(&thread, NULL, newThread, "cool");
-
-    root = DefaultRootWindow(display);
-
+void registerEvents() {
     XGrabButton(
             //Display, Button, Modifiers
             display, AnyButton, AnyModifier,
@@ -123,9 +103,21 @@ int main(void) {
     XSelectInput(display, root, FocusChangeMask | PropertyChangeMask |
                                 SubstructureNotifyMask | SubstructureRedirectMask |
                                 KeyPressMask | ButtonPressMask);
+}
 
+int main(void) {
+    printf("Shift-WM 1.0 starting..\n");
 
-//    drawableWindow();
+    if (!(display = XOpenDisplay(0x0))) {
+        printf("Cannot open display\n");
+        return 1;
+    }
+
+    pthread_t thread;
+    pthread_create(&thread, NULL, newThread, "cool");
+
+    root = DefaultRootWindow(display);
+    registerEvents();
 
     printf("Done!\n");
 

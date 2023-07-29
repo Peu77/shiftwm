@@ -2,6 +2,7 @@
 
 #include <X11/Xlib.h>
 
+typedef struct Layout Layout;
 typedef struct Client Client;
 struct Client {
     Window window;
@@ -13,16 +14,13 @@ struct Client {
     int height;
 };
 
-static Client *head;
+void createClient(Display *display, Layout *layout, Window window, int width, int height);
 
-void createClient(Display *display, Window window, int width, int height);
-
-void removeClient(Client *client);
+void removeClient(Layout *layout, Client *client);
 
 void moveClient(Display *display, Client *client, int x, int y);
 
-void printSize();
+void printSize(Layout *layout);
 
-Client *getHead();
+Client *getClientFromWindow(Layout *layout, const Window *window);
 
-Client *getClientFromWindow(const Window *window);

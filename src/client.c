@@ -1,8 +1,10 @@
 #include "client.h"
 #include "malloc.h"
 
-Client *getClientFromWindow(const Window *window) {
-    Client *client = getHead();
+#include "layout.h"
+
+Client *getClientFromWindow(Layout *layout, const Window *window) {
+    Client *client = layout->clients;
     while (client != NULL) {
         if (client->window == *window) {
             return client;
@@ -12,9 +14,10 @@ Client *getClientFromWindow(const Window *window) {
     return NULL;
 }
 
-void createClient(Display *display, Window window, int width, int height) {
+void createClient(Display *display, Layout *layout, Window window, int width, int height) {
     Client *newClient;
     newClient = malloc(sizeof(Client));
+
     newClient->window = window;
     newClient->isFocus = 1;
 
@@ -26,14 +29,15 @@ void createClient(Display *display, Window window, int width, int height) {
     XSelectInput(display, window, FocusChangeMask | EnterWindowMask | LeaveWindowMask);
 
     // create linked-list head if it is the first window
-    if (getHead() == NULL) {
+    Client *head = layout->clients;
+    if (head == NULL) {
         head = malloc(sizeof(Client));
         head->window = 0;
     }
 
     // add client to linked-list
     newClient->next = head;
-    head = newClient;
+    layout->clients = newClient;
 
     // set client position, size and show it on the top
     newClient->width = width;
@@ -43,18 +47,18 @@ void createClient(Display *display, Window window, int width, int height) {
     XMoveResizeWindow(display, window,
                       0, 0, width, height);
 
-    printSize();
+    printSize(layout);
 
 }
 
-void removeClient(Client *client) {
-    Client *current = getHead();
+void removeClient(Layout *layout, Client *client) {
+    Client *current = layout->clients;
 
     while (current->window != 0) {
         if (current == client) {
-            head = current->next;
+            layout->clients = current->next;
             free(client);
-            printSize();
+            printSize(layout);
             return;
         }
 
@@ -63,15 +67,15 @@ void removeClient(Client *client) {
             printf("delete client\n");
 
             free(client);
-            printSize();
+            printSize(layout);
             return;
         }
         current = current->next;
     }
 }
 
-void printSize() {
-    Client *client = getHead();
+void printSize(Layout *layout) {
+    Client *client = layout->clients;
     int size = 0;
     while (client->window != 0) {
         size++;
@@ -86,8 +90,4 @@ void moveClient(Display *display, Client *client, int x, int y) {
     client->x = x;
     client->y = y;
     XMoveWindow(display, client->window, x, y);
-}
-
-Client *getHead() {
-    return head;
 }
