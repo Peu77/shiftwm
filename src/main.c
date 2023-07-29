@@ -16,6 +16,11 @@ Layout *getCurrentLayout() {
     return &layout[currentLayout];
 }
 
+struct {
+    XButtonEvent buttonEvent;
+    XWindowAttributes windowAttributes;
+} dragWindow;
+
 void onNewWindow(XMapRequestEvent event) {
     printf("create window\n");
     int width = 300;
@@ -47,18 +52,51 @@ void handleEvents() {
 
     // if mouse cursor is moved inside a window
     if (event.type == EnterNotify) {
-        printf("mouse enter\n");
-        // print title of the window
-        char *title;
-        XFetchName(display, event.xcrossing.window, &title);
-        printf("title: %s\n", title);
+        if (dragWindow.buttonEvent.subwindow == None) {
+            printf("mouse enter\n");
+            // print title of the window
+            char *title;
+            XFetchName(display, event.xcrossing.window, &title);
+            printf("title: %s\n", title);
 
-        XSetInputFocus(display, event.xcrossing.window, RevertToParent, CurrentTime);
+            XSetInputFocus(display, event.xcrossing.window, RevertToParent, CurrentTime);
+        }
     }
 
     // if mouse cursor is moved outside a window
     if (event.type == LeaveNotify) {
-        printf("mouse leave\n");
+        if (dragWindow.buttonEvent.subwindow == None) {
+            printf("mouse leave\n");
+        }
+    }
+
+    // alt + left click to select which window to drag
+    if (event.type == ButtonPress) {
+        // get window hovered by mouse cursor
+        Window window = event.xbutton.subwindow;
+        if (window) {
+            XGetWindowAttributes(display, window, &dragWindow.windowAttributes);
+            XRaiseWindow(display, window);
+
+            dragWindow.buttonEvent = event.xbutton;
+        }
+    }
+
+    // hold alt + left click to drag window
+    if (event.type == MotionNotify) {
+        XButtonEvent buttonEvent = dragWindow.buttonEvent;
+        XWindowAttributes windowAttributes = dragWindow.windowAttributes;
+
+        int diffX = event.xmotion.x_root - buttonEvent.x;
+        int diffY = event.xmotion.y_root - buttonEvent.y;
+
+        XMoveWindow(display, buttonEvent.subwindow,
+                    windowAttributes.x + diffX,
+                    windowAttributes.y + diffY);
+    }
+
+    if (event.type == ButtonRelease) {
+        dragWindow.buttonEvent.subwindow = None;
     }
 }
 
@@ -91,18 +129,11 @@ void drawableWindow() {
 }
 
 void registerEvents() {
-    XGrabButton(
-            //Display, Button, Modifiers
-            display, AnyButton, AnyModifier,
-            //Window, OwnerE?, EventMask
-            root, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | OwnerGrabButtonMask,
-            //PointerMode, KBMode, Confine, Cursor
-            GrabModeAsync, GrabModeAsync, None, None
-    );
+    XGrabButton(display, 1, Mod1Mask, root, True, ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                GrabModeAsync,
+                GrabModeAsync, None, None);
 
-    XSelectInput(display, root, FocusChangeMask | PropertyChangeMask |
-                                SubstructureNotifyMask | SubstructureRedirectMask |
-                                KeyPressMask | ButtonPressMask);
+    XSelectInput(display, root, PropertyChangeMask | SubstructureNotifyMask | SubstructureRedirectMask);
 }
 
 int main(void) {
