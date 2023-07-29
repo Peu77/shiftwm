@@ -90,7 +90,7 @@ void handleEvents() {
     }
 
     // hold alt + left click to drag window
-    if (event.type == MotionNotify) {
+    if (event.type == MotionNotify && dragWindow.dragging) {
         XMoveWindow(display, *dragWindow.window,
                     event.xmotion.x_root - dragWindow.diffX,
                     event.xmotion.y_root - dragWindow.diffY);

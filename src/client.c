@@ -5,12 +5,13 @@
 
 Client *getClientFromWindow(Layout *layout, const Window *window) {
     Client *client = layout->clients;
-    while (client != NULL) {
+    while (client != NULL && client->window) {
         if (client->window == *window) {
             return client;
         }
         client = client->next;
     }
+
     return NULL;
 }
 
