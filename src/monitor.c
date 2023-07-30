@@ -2,6 +2,7 @@
 #include "monitor.h"
 #include "stdio.h"
 #include "layout.h"
+#include "config.h"
 
 void createMonitor(Display *display, int index, int x, int y, int width, int height) {
     printf("create monitor %d: %d\n", width, height);

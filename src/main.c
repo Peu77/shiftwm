@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <X11/cursorfont.h>
 #include <X11/extensions/Xinerama.h>
+#include "keys.h"
 
 Display *display;
 Window root;
@@ -19,6 +20,7 @@ int running = 1;
 Monitor *currentMonitor;
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define LENGTH(x) (sizeof(x) / sizeof(x[0]))
 
 Layout *getCurrentLayout() {
     Layout *current = &currentMonitor->layouts[currentMonitor->currentLayout];
@@ -38,6 +40,10 @@ struct {
     int windowY;
     int resizing;
 } resizeWindow;
+
+void shutdown() {
+    running = 0;
+}
 
 void changeCursor(Window window, unsigned int cursorId) {
     Cursor cursor;
@@ -96,6 +102,12 @@ void handleFirstClickResize(XEvent *event) {
 
         changeCursor(window, XC_bottom_right_corner);
     }
+}
+
+void commandFunction(void *data) {
+    char *command = (char *) data;
+    printf("command: %s\n", command);
+    system(command);
 }
 
 void handleEvents() {
@@ -208,26 +220,19 @@ void handleEvents() {
     }
 
     if (event.type == KeyPress) {
-        if (event.xkey.keycode == XKeysymToKeycode(display, XK_q)) {
-            printf("close\n");
-            running = 0;
-        }
-
-        if (event.xkey.keycode == XKeysymToKeycode(display, XK_Return)) {
-            // create new thread
-            printf("enter\n");
-            pthread_t thread;
-            pthread_create(&thread, NULL, newThread, "new thread");
-        }
-
-        if (event.xkey.keycode == XKeysymToKeycode(display, XK_c)) {
-            // close current window
-            Window window = event.xkey.subwindow;
-            if (window) {
-                XDestroyWindow(display, window);
+        // get key by keycode
+        for (int i = 0; i < LENGTH(keys); i++) {
+            Key key = keys[i];
+            if (event.xkey.keycode == XKeysymToKeycode(display, key.keycode) && event.xkey.state == key.modifier) {
+                if (key.function != NULL) {
+                    key.function(&event, display);
+                } else if (key.command != NULL) {
+                    pthread_t thread;
+                    pthread_create(&thread, NULL, (void *(*)(void *)) commandFunction, (void *) key.command);
+                }
             }
-            printf("close window\n");
         }
+
     }
 
 }
@@ -261,14 +266,14 @@ void registerEvents() {
                 GrabModeAsync,
                 GrabModeAsync, None, None);
 
-    XGrabKey(display, XKeysymToKeycode(display, XK_q), SUPER_KEY, root, True,
-             GrabModeAsync, GrabModeAsync);
-
-    XGrabKey(display, XKeysymToKeycode(display, XK_Return), SUPER_KEY, root, True,
-             GrabModeAsync, GrabModeAsync);
-
-    XGrabKey(display, XKeysymToKeycode(display, XK_c), SUPER_KEY, root, True,
-             GrabModeAsync, GrabModeAsync);
+    for (int i = 0; i < LENGTH(keys); i++) {
+        Key key = keys[i];
+        if (key.keycode != 0) {
+            printf("grab key: %d\n", key.modifier);
+            XGrabKey(display, XKeysymToKeycode(display, key.keycode), key.modifier, root, True,
+                     GrabModeAsync, GrabModeAsync);
+        }
+    }
 
     XSelectInput(display, root,
                  PropertyChangeMask | SubstructureNotifyMask | SubstructureRedirectMask | PointerMotionMask);
@@ -302,7 +307,6 @@ int main(void) {
         printf("Cannot open display\n");
         return 1;
     }
-
 
     root = DefaultRootWindow(display);
     registerEvents();

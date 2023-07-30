@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.23)
-project(tinywm C)
+project(shiftwm C)
 
 set(CMAKE_C_STANDARD 23)
 
@@ -17,4 +17,4 @@ include_directories(${X11_Xinerama_INCLUDE_PATH})
 file(GLOB SOURCES src/*.c)
 
 
-add_executable(tinywm ${SOURCES})
+add_executable(shiftwm ${SOURCES})

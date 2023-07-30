@@ -1,6 +1,5 @@
 #pragma once
 
-#include "config.h"
 #include <X11/Xlib.h>
 
 
