@@ -26,7 +26,7 @@ void createClient(Display *display, Layout *layout, Window window, int width, in
     XSetWindowBorder(display, window, 0xe81a0c);
     XSetWindowBorderWidth(display, window, 2);
 
-    // set focus and unfocus event
+    // register events for the window
     XSelectInput(display, window, FocusChangeMask | EnterWindowMask | LeaveWindowMask);
 
     // create linked-list head if it is the first window
@@ -40,7 +40,7 @@ void createClient(Display *display, Layout *layout, Window window, int width, in
     newClient->next = head;
     layout->clients = newClient;
 
-    // set client position, size and show it on the top
+    // set client position, size and show it on the topisFocus = {int} 3457
     newClient->width = width;
     newClient->height = height;
     XMapWindow(display, window);

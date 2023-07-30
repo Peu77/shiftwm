@@ -1,6 +1,7 @@
 #include "layout.h"
 #include "stdio.h"
 #include "client.h"
+#include "monitor.h"
 
 void updateLayout(Display *display, Layout *layout, int width, int height) {
     Client *client = layout->clients;
@@ -12,7 +13,9 @@ void updateLayout(Display *display, Layout *layout, int width, int height) {
             return;
         }
 
-        moveClient(display, client, i * client->width, client->y);
+        Monitor *monitor = layout->monitor;
+
+        moveClient(display, client, monitor->x + i * client->width, client->y);
         i++;
         client = client->next;
     }
