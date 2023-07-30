@@ -7,6 +7,7 @@
 #include "monitor.h"
 
 #include <X11/Xlib.h>
+#include <X11/keysym.h>
 #include <stdlib.h>
 #include <X11/cursorfont.h>
 #include <X11/extensions/Xinerama.h>
@@ -16,6 +17,8 @@ Window root;
 int running = 1;
 
 Monitor *currentMonitor;
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 Layout *getCurrentLayout() {
     Layout *current = &currentMonitor->layouts[currentMonitor->currentLayout];
@@ -28,6 +31,13 @@ struct {
     int diffY;
     Window window;
 } dragWindow;
+
+struct {
+    Window window;
+    int windowX;
+    int windowY;
+    int resizing;
+} resizeWindow;
 
 void changeCursor(Window window, unsigned int cursorId) {
     Cursor cursor;
@@ -71,6 +81,23 @@ void handleFirstClickDrag(XEvent *event) {
     }
 }
 
+void handleFirstClickResize(XEvent *event) {
+    Window window = event->xbutton.subwindow;
+
+    if (window) {
+        resizeWindow.resizing = 1;
+        resizeWindow.window = window;
+
+        XWindowAttributes windowAttributes;
+        XGetWindowAttributes(display, window, &windowAttributes);
+
+        resizeWindow.windowX = windowAttributes.x;
+        resizeWindow.windowY = windowAttributes.y;
+
+        changeCursor(window, XC_bottom_right_corner);
+    }
+}
+
 void handleEvents() {
     XEvent event;
     XNextEvent(display, &event);
@@ -94,7 +121,7 @@ void handleEvents() {
 
     // if mouse cursor is moved inside a window
     if (event.type == EnterNotify) {
-        if (dragWindow.dragging == 0) {
+        if (dragWindow.dragging == 0 && resizeWindow.resizing == 0) {
             Window window = event.xcrossing.window;
             printf("mouse enter\n");
             // print title of the window
@@ -103,13 +130,23 @@ void handleEvents() {
             printf("title: %s\n", title);
 
             XSetInputFocus(display, window, RevertToParent, CurrentTime);
+
+            Client *client = getClientFromWindow(getCurrentLayout(), &window);
+            if (client) {
+                client->isFocus = 1;
+            }
         }
     }
 
     // if mouse cursor is moved outside a window
     if (event.type == LeaveNotify) {
         if (dragWindow.dragging == 0) {
-            printf("mouse leave\n");
+
+            Window window = event.xcrossing.window;
+            Client *client = getClientFromWindow(getCurrentLayout(), &window);
+            if (client) {
+                client->isFocus = 0;
+            }
         }
     }
 
@@ -121,7 +158,7 @@ void handleEvents() {
         }
 
         if (event.xbutton.state == SUPER_KEY && event.xbutton.button == 3) {
-            printf("right click\n");
+            handleFirstClickResize(&event);
         }
     }
 
@@ -131,6 +168,15 @@ void handleEvents() {
             XMoveWindow(display, dragWindow.window,
                         event.xmotion.x_root - dragWindow.diffX,
                         event.xmotion.y_root - dragWindow.diffY);
+
+
+        } else if (resizeWindow.resizing) {
+            int width = MAX(40, event.xmotion.x_root - resizeWindow.windowX);
+            int height = MAX(40, event.xmotion.y_root - resizeWindow.windowY);
+
+            XResizeWindow(display, resizeWindow.window,
+                          width,
+                          height);
         } else {
             if (event.xmotion.time - lastTime > 1000 / 30) {
                 lastTime = event.xmotion.time;
@@ -149,22 +195,38 @@ void handleEvents() {
         }
     }
 
-    if (event.type == ButtonRelease && dragWindow.dragging && event.xbutton.button == 1) {
-        dragWindow.dragging = 0;
-        XUndefineCursor(display, dragWindow.window);
+    if (event.type == ButtonRelease) {
+        if (resizeWindow.resizing == 1) {
+            resizeWindow.resizing = 0;
+            XUndefineCursor(display, resizeWindow.window);
+        }
+
+        if (dragWindow.dragging == 1) {
+            dragWindow.dragging = 0;
+            XUndefineCursor(display, dragWindow.window);
+        }
     }
 
     if (event.type == KeyPress) {
-        if (event.xkey.keycode == XKeysymToKeycode(display, XStringToKeysym("q"))) {
+        if (event.xkey.keycode == XKeysymToKeycode(display, XK_q)) {
             printf("close\n");
             running = 0;
         }
 
-        if (event.xkey.keycode == XKeysymToKeycode(display, XStringToKeysym("f"))) {
+        if (event.xkey.keycode == XKeysymToKeycode(display, XK_Return)) {
             // create new thread
             printf("enter\n");
             pthread_t thread;
             pthread_create(&thread, NULL, newThread, "new thread");
+        }
+
+        if (event.xkey.keycode == XKeysymToKeycode(display, XK_c)) {
+            // close current window
+            Window window = event.xkey.subwindow;
+            if (window) {
+                XDestroyWindow(display, window);
+            }
+            printf("close window\n");
         }
     }
 
@@ -199,30 +261,20 @@ void registerEvents() {
                 GrabModeAsync,
                 GrabModeAsync, None, None);
 
-    XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("q")), SUPER_KEY, root, True,
+    XGrabKey(display, XKeysymToKeycode(display, XK_q), SUPER_KEY, root, True,
              GrabModeAsync, GrabModeAsync);
 
-    // grab enter
-    XGrabKey(display, XKeysymToKeycode(display, XStringToKeysym("f")), SUPER_KEY, root, True,
+    XGrabKey(display, XKeysymToKeycode(display, XK_Return), SUPER_KEY, root, True,
+             GrabModeAsync, GrabModeAsync);
+
+    XGrabKey(display, XKeysymToKeycode(display, XK_c), SUPER_KEY, root, True,
              GrabModeAsync, GrabModeAsync);
 
     XSelectInput(display, root,
                  PropertyChangeMask | SubstructureNotifyMask | SubstructureRedirectMask | PointerMotionMask);
 }
 
-int main(void) {
-    printf("Shift-WM 1.0 starting..\n");
-
-    if (!(display = XOpenDisplay(0x0))) {
-        printf("Cannot open display\n");
-        return 1;
-    }
-
-
-    root = DefaultRootWindow(display);
-    registerEvents();
-    changeCursor(root, XC_left_ptr);
-
+void initMonitors() {
     if (XineramaIsActive(display)) {
         printf("Xinerama is active\n");
     }
@@ -241,6 +293,22 @@ int main(void) {
     }
 
     currentMonitor = &monitors[0];
+}
+
+int main(void) {
+    printf("Shift-WM 1.0 starting..\n");
+
+    if (!(display = XOpenDisplay(0x0))) {
+        printf("Cannot open display\n");
+        return 1;
+    }
+
+
+    root = DefaultRootWindow(display);
+    registerEvents();
+    changeCursor(root, XC_left_ptr);
+
+    initMonitors();
 
     printf("Done!\n");
 
